@@ -5,17 +5,24 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const DB_PATH = process.env.DB_PATH ?? join(__dirname, '../../data/str.db');
+// Vercel: use in-memory DB (no persistent filesystem).
+// Local/Docker: use a file-based DB.
+const DB_PATH = process.env.DB_PATH ?? (process.env.VERCEL ? ':memory:' : join(__dirname, '../../data/str.db'));
 
 let _db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!_db) {
     _db = new Database(DB_PATH);
-    _db.pragma('journal_mode = WAL');
+    // WAL mode only works on file-based DBs
+    if (DB_PATH !== ':memory:') {
+      _db.pragma('journal_mode = WAL');
+    }
     _db.pragma('foreign_keys = ON');
     const schema = readFileSync(join(__dirname, 'schema.sql'), 'utf-8');
     _db.exec(schema);
+
+    // Note: in-memory DB seeding is handled by the caller (api/index.ts or server/index.ts)
   }
   return _db;
 }
@@ -26,52 +33,27 @@ export function closeDb(): void {
 }
 
 export type CityRow = {
-  id: string;
-  name: string;
-  state: string;
-  aliases: string;
-  counties: string;
-  permit_required: number;
-  permit_fee: string;
-  permit_renewal_fee: string | null;
-  permit_link: string;
-  primary_residence_required: number;
-  hosted_day_limit: number | null;
-  unhosted_day_limit: number | null;
-  max_guests: number | null;
-  allowed_zones: string;
-  prohibited_zones: string;
-  tax_rate: number | null;
-  tax_note: string;
-  liability_insurance_required: number;
-  liability_insurance_min: number | null;
-  max_bedrooms: number | null;
-  requires_host_presence: number | null;
-  non_owner_occupied_allowed: number;
-  non_owner_occupied_zones: string;
-  renters_allowed: number;
-  last_updated: string;
-  scrape_status: string;
-  scraped_at: string | null;
+  id: string; name: string; state: string; aliases: string; counties: string;
+  permit_required: number; permit_fee: string; permit_renewal_fee: string | null;
+  permit_link: string; primary_residence_required: number;
+  hosted_day_limit: number | null; unhosted_day_limit: number | null;
+  max_guests: number | null; allowed_zones: string; prohibited_zones: string;
+  tax_rate: number | null; tax_note: string; liability_insurance_required: number;
+  liability_insurance_min: number | null; max_bedrooms: number | null;
+  requires_host_presence: number | null; non_owner_occupied_allowed: number;
+  non_owner_occupied_zones: string; renters_allowed: number; last_updated: string;
+  scrape_status: string; scraped_at: string | null;
 };
 
 export type RuleRow = {
-  id: string;
-  city_id: string;
-  category: string;
-  title: string;
-  rule_text: string;
-  severity: string;
-  source_url: string | null;
-  last_verified: string | null;
-  sort_order: number;
+  id: string; city_id: string; category: string; title: string;
+  rule_text: string; severity: string; source_url: string | null;
+  last_verified: string | null; sort_order: number;
 };
 
 export function rowToCity(row: CityRow) {
   return {
-    id: row.id,
-    name: row.name,
-    state: row.state,
+    id: row.id, name: row.name, state: row.state,
     aliases: JSON.parse(row.aliases) as string[],
     counties: JSON.parse(row.counties) as string[],
     permitRequired: row.permit_required === 1,
