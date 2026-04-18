@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      SCRAPE_ON_STARTUP: "true"
+      DB_PATH: /data/str.db
+    volumes:
+      - str_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  str_data:
