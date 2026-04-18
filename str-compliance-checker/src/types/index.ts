@@ -1,6 +1,8 @@
 export type PropertyType = 'single-family' | 'condo' | 'apartment' | 'multi-family' | 'other';
 export type ZoningType = 'residential' | 'commercial' | 'mixed-use' | 'unknown';
 export type OwnershipType = 'own' | 'rent';
+export type Severity = 'pass' | 'warning' | 'fail' | 'info';
+export type DataSource = 'live' | 'scraped' | 'seeded' | 'scrape_failed';
 
 export interface Answers {
   isPrimaryResidence: boolean | null;
@@ -18,60 +20,6 @@ export interface Answers {
   isEntireUnit: boolean | null;
 }
 
-export type Severity = 'pass' | 'warning' | 'fail' | 'info';
-
-export interface ComplianceRule {
-  id: string;
-  title: string;
-  description: string;
-  severity: Severity;
-  recommendation?: string;
-  officialLink?: string;
-}
-
-export interface ComplianceResult {
-  cityId: string;
-  cityName: string;
-  overallStatus: 'compliant' | 'likely-compliant' | 'non-compliant' | 'needs-registration';
-  score: number; // 0-100
-  rules: ComplianceRule[];
-  registrationRequired: boolean;
-  registrationFee?: string;
-  registrationLink?: string;
-  keyRequirements: string[];
-  taxes: string[];
-}
-
-export interface CityRegulation {
-  id: string;
-  name: string;
-  state: string;
-  aliases: string[];          // alternate city name spellings
-  counties: string[];         // county names that map to this city
-  permitRequired: boolean;
-  permitFee: string;
-  permitRenewalFee?: string;
-  permitLink: string;
-  primaryResidenceRequired: boolean;
-  ownerOccupiedOnly: boolean;  // false = non-owner-occupied also allowed
-  hostedDayLimit: number | null;   // null = unlimited
-  unhostedDayLimit: number | null; // null = unlimited or not applicable
-  maxGuests: number | null;
-  allowedZones: ZoningType[];    // empty = all zones
-  prohibitedZones: string[];     // specific zone codes banned
-  taxRate: number | null;        // percentage
-  taxNote: string;
-  liabilityInsuranceRequired: boolean;
-  liabilityInsuranceMin: number | null; // in dollars
-  maxBedrooms: number | null;
-  requiresHostPresence: boolean | null; // null = depends on type
-  nonOwnerOccupiedAllowed: boolean;
-  nonOwnerOccupiedZones: string[];
-  rentersAllowed: boolean;
-  keyRules: string[];
-  lastUpdated: string;
-}
-
 export interface Question {
   id: keyof Answers;
   text: string;
@@ -82,4 +30,68 @@ export interface Question {
   placeholder?: string;
   min?: number;
   max?: number;
+}
+
+export interface CityData {
+  id: string;
+  name: string;
+  state: string;
+  permitRequired: boolean;
+  permitFee: string;
+  permitRenewalFee?: string;
+  permitLink: string;
+  primaryResidenceRequired: boolean;
+  hostedDayLimit: number | null;
+  unhostedDayLimit: number | null;
+  maxGuests: number | null;
+  taxRate: number | null;
+  taxNote: string;
+  liabilityInsuranceRequired: boolean;
+  liabilityInsuranceMin: number | null;
+  maxBedrooms: number | null;
+  requiresHostPresence: boolean | null;
+  nonOwnerOccupiedAllowed: boolean;
+  rentersAllowed: boolean;
+  scrapeStatus: DataSource;
+  scrapedAt: string | null;
+  lastUpdated: string;
+  regulationRules?: RegulationRule[];
+}
+
+export interface RegulationRule {
+  id: string;
+  city_id: string;
+  category: string;
+  title: string;
+  rule_text: string;
+  severity: string;
+  source_url: string | null;
+  last_verified: string | null;
+  sort_order: number;
+}
+
+export interface ComplianceRule {
+  id: string;
+  title: string;
+  description: string;
+  severity: Severity;
+  recommendation?: string;
+  officialLink?: string;
+  category: string;
+}
+
+export interface ComplianceResult {
+  cityId: string;
+  cityName: string;
+  overallStatus: 'compliant' | 'likely-compliant' | 'non-compliant' | 'needs-registration';
+  score: number;
+  rules: ComplianceRule[];
+  registrationRequired: boolean;
+  registrationFee: string;
+  registrationLink: string;
+  keyRequirements: Array<{ title: string; text: string; severity: string; category: string }>;
+  taxes: string[];
+  dataSource: DataSource;
+  scrapedAt: string | null;
+  lastUpdated: string;
 }
