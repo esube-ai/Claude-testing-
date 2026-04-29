@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS scrape_log (
   FOREIGN KEY (city_id) REFERENCES cities(id)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  plan TEXT NOT NULL DEFAULT 'free',
+  checks_this_month INTEGER NOT NULL DEFAULT 0,
+  checks_reset_at TEXT NOT NULL DEFAULT (date('now', 'start of month', '+1 month')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_regulation_rules_city ON regulation_rules(city_id);
 CREATE INDEX IF NOT EXISTS idx_scrape_log_city ON scrape_log(city_id);
 CREATE INDEX IF NOT EXISTS idx_scrape_log_date ON scrape_log(scraped_at DESC);

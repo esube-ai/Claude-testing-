@@ -7,6 +7,7 @@ import citiesRouter from './routes/cities.js';
 import complianceRouter from './routes/compliance.js';
 import geocodeRouter from './routes/geocode.js';
 import scrapeRouter from './routes/scrape.js';
+import authRouter from './routes/auth.js';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -26,6 +27,7 @@ export function createApp() {
   });
   app.use('/api', apiLimiter);
 
+  app.use('/api/auth', authRouter);
   app.use('/api/cities', citiesRouter);
   app.use('/api/compliance', complianceRouter);
   app.use('/api/geocode', geocodeRouter);
