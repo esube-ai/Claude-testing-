@@ -1,140 +1,145 @@
 import { useState } from 'react';
-import { MapPin, Search, ChevronDown } from 'lucide-react';
-import { geocodeAddress } from '../utils/geocoding';
-import { CITIES } from '../data/cities';
-import type { CityRegulation } from '../types';
+import { MapPin, Search, ChevronDown, Building2 } from 'lucide-react';
+import { api } from '../api/client';
+import type { CityData } from '../types';
 
 interface Props {
-  onCitySelected: (city: CityRegulation, address?: string) => void;
+  cities: CityData[];
+  onCitySelected: (city: CityData, address?: string) => void;
 }
 
-export function AddressStep({ onCitySelected }: Props) {
+export function AddressStep({ cities, onCitySelected }: Props) {
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [manualMode, setManualMode] = useState(false);
-  const [selectedCityId, setSelectedCityId] = useState('');
+  const [manualOpen, setManualOpen] = useState(false);
+  const [selectedId, setSelectedId] = useState('');
 
-  async function handleAddressSearch() {
-    if (!address.trim()) {
-      setError('Please enter an address.');
-      return;
-    }
-    setLoading(true);
-    setError('');
+  async function handleSearch() {
+    if (!address.trim()) { setError('Please enter an address.'); return; }
+    setLoading(true); setError('');
     try {
-      const result = await geocodeAddress(address.trim());
-      if (result.detectedCity) {
-        onCitySelected(result.detectedCity, result.formattedAddress);
-      } else {
-        setError(
-          `We found your address in ${result.city}, ${result.state}, but that city isn't in our database yet. ` +
-          `Please select your city manually below.`
-        );
-        setManualMode(true);
+      const result = await api.geocode(address.trim());
+      if (result.detectedCityId) {
+        const city = cities.find(c => c.id === result.detectedCityId);
+        if (city) { onCitySelected(city, result.formattedAddress); return; }
       }
+      setError(
+        result.detectedCityName
+          ? `${result.detectedCityName} isn't in our database yet. Select your city below.`
+          : `Address found in ${result.city}, ${result.state} — not in our 12 supported cities. Select manually.`
+      );
+      setManualOpen(true);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Geocoding failed. Please try again or select your city manually.';
-      setError(msg);
-      setManualMode(true);
-    } finally {
-      setLoading(false);
-    }
+      setError(e instanceof Error ? e.message : 'Lookup failed. Please select your city below.');
+      setManualOpen(true);
+    } finally { setLoading(false); }
   }
 
-  function handleManualSelect() {
-    const city = CITIES.find(c => c.id === selectedCityId);
-    if (city) onCitySelected(city, address.trim() || undefined);
-    else setError('Please select a city.');
+  function handleManualContinue() {
+    const city = cities.find(c => c.id === selectedId);
+    if (!city) { setError('Please select a city.'); return; }
+    onCitySelected(city, address.trim() || undefined);
   }
 
   return (
-    <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <div className="flex justify-center">
-          <div className="p-4 bg-blue-100 rounded-full">
-            <MapPin className="w-8 h-8 text-blue-600" />
-          </div>
+    <div className="space-y-8">
+      {/* Hero */}
+      <div className="text-center space-y-3">
+        <div className="inline-flex items-center justify-center w-14 h-14 bg-blue-600 rounded-2xl shadow-lg shadow-blue-200">
+          <MapPin className="w-7 h-7 text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900">Enter Your Rental Address</h2>
-        <p className="text-gray-500 text-sm max-w-md mx-auto">
-          We'll automatically detect your city and apply the correct regulations.
-          Covered cities: NYC, Los Angeles, Chicago, Miami, San Francisco, Seattle, Austin, Denver, Houston, Nashville, New Orleans, Washington DC.
-        </p>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900">Check Your Rental Compliance</h2>
+          <p className="text-slate-500 text-sm mt-1 max-w-sm mx-auto">
+            Enter your property address and we'll apply the correct city regulations automatically.
+          </p>
+        </div>
       </div>
 
+      {/* Search */}
       <div className="space-y-3">
         <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+          <div className="relative flex-1">
+            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               value={address}
               onChange={e => setAddress(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddressSearch()}
+              onKeyDown={e => e.key === 'Enter' && handleSearch()}
               placeholder="123 Main St, New York, NY 10001"
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              className="w-full pl-9 pr-3 py-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm"
             />
           </div>
           <button
-            onClick={handleAddressSearch}
-            disabled={loading}
-            className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+            onClick={handleSearch} disabled={loading}
+            className="flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-60 transition-colors font-medium text-sm shadow-sm"
           >
-            {loading ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Search className="w-4 h-4" />
-            )}
+            {loading
+              ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              : <Search className="w-4 h-4" />}
             {loading ? 'Looking up…' : 'Check'}
           </button>
         </div>
 
         {error && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-            {error}
+          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+            <span className="mt-0.5">⚠</span> {error}
           </div>
         )}
 
-        <button
-          onClick={() => setManualMode(v => !v)}
-          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          <ChevronDown className={`w-4 h-4 transition-transform ${manualMode ? 'rotate-180' : ''}`} />
+        <button onClick={() => setManualOpen(v => !v)}
+          className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors">
+          <ChevronDown className={`w-4 h-4 transition-transform ${manualOpen ? 'rotate-180' : ''}`} />
           Select city manually
         </button>
+      </div>
 
-        {manualMode && (
-          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-            <p className="text-sm text-gray-600 font-medium">Select your city:</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {CITIES.map(city => (
-                <button
-                  key={city.id}
-                  onClick={() => setSelectedCityId(city.id)}
-                  className={`px-3 py-2 rounded-lg text-sm border transition-colors text-left ${
-                    selectedCityId === city.id
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-blue-300'
-                  }`}
-                >
-                  <div className="font-medium">{city.name}</div>
-                  <div className={`text-xs ${selectedCityId === city.id ? 'text-blue-100' : 'text-gray-400'}`}>
-                    {city.state}
-                  </div>
-                </button>
-              ))}
-            </div>
-            {selectedCityId && (
+      {/* Manual city picker */}
+      {manualOpen && (
+        <div className="space-y-3">
+          <p className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+            <Building2 className="w-4 h-4" /> Select your city
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {cities.map(city => (
               <button
-                onClick={handleManualSelect}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                key={city.id}
+                onClick={() => setSelectedId(city.id)}
+                className={`relative flex flex-col p-3 rounded-xl border-2 text-left transition-all ${
+                  selectedId === city.id
+                    ? 'border-blue-600 bg-blue-50'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
               >
-                Continue with {CITIES.find(c => c.id === selectedCityId)?.name}
+                <span className={`text-sm font-semibold ${selectedId === city.id ? 'text-blue-700' : 'text-slate-800'}`}>
+                  {city.name}
+                </span>
+                <span className={`text-xs mt-0.5 ${selectedId === city.id ? 'text-blue-500' : 'text-slate-400'}`}>
+                  {city.state}
+                </span>
+                {city.permitRequired && (
+                  <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-amber-400" title="Permit required" />
+                )}
               </button>
-            )}
+            ))}
           </div>
-        )}
+          {selectedId && (
+            <button
+              onClick={handleManualContinue}
+              className="w-full py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors font-medium text-sm"
+            >
+              Continue with {cities.find(c => c.id === selectedId)?.name} →
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Supported cities strip */}
+      <div className="pt-2 border-t border-slate-100">
+        <p className="text-xs text-slate-400 text-center">
+          Covers {cities.length} major US cities · Regulations sourced from official city portals · Updated 2026
+        </p>
       </div>
     </div>
   );

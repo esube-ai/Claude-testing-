@@ -1,41 +1,50 @@
-import { useState, useCallback } from 'react';
-import { Home, ShieldCheck } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { ShieldCheck, Home, Loader2 } from 'lucide-react';
 import { AddressStep } from './components/AddressStep';
 import { QuestionStep } from './components/QuestionStep';
 import { ResultsStep } from './components/ResultsStep';
 import { getQuestionsForCity } from './data/questions';
-import { checkCompliance } from './utils/compliance';
-import type { CityRegulation, Answers, ComplianceResult } from './types';
+import { api } from './api/client';
+import type { CityData, Answers, ComplianceResult } from './types';
 
 type Step = 'address' | 'questions' | 'results';
 
-const EMPTY_ANSWERS: Answers = {
-  isPrimaryResidence: null,
-  ownershipType: null,
-  daysPerYear: null,
-  isHosted: null,
-  guestsAtOnce: null,
-  hasPermit: null,
-  propertyType: null,
-  hasHOA: null,
-  bedroomCount: null,
-  zoningType: null,
-  hasLiabilityInsurance: null,
-  insuranceCoverage: null,
-  isEntireUnit: null,
+const EMPTY: Answers = {
+  isPrimaryResidence: null, ownershipType: null, daysPerYear: null,
+  isHosted: null, guestsAtOnce: null, hasPermit: null, propertyType: null,
+  hasHOA: null, bedroomCount: null, zoningType: null,
+  hasLiabilityInsurance: null, insuranceCoverage: null, isEntireUnit: null,
 };
 
 export default function App() {
   const [step, setStep] = useState<Step>('address');
-  const [city, setCity] = useState<CityRegulation | null>(null);
+  const [cities, setCities] = useState<CityData[]>([]);
+  const [citiesLoading, setCitiesLoading] = useState(true);
+  const [citiesError, setCitiesError] = useState('');
+  const [city, setCity] = useState<CityData | null>(null);
   const [address, setAddress] = useState<string | undefined>();
-  const [answers, setAnswers] = useState<Answers>(EMPTY_ANSWERS);
+  const [answers, setAnswers] = useState<Answers>(EMPTY);
   const [result, setResult] = useState<ComplianceResult | null>(null);
+  const [checking, setChecking] = useState(false);
 
-  const handleCitySelected = useCallback((selectedCity: CityRegulation, addr?: string) => {
-    setCity(selectedCity);
+  // Load all cities (with their regulation rules) from the API
+  useEffect(() => {
+    setCitiesLoading(true);
+    api.getCities()
+      .then(data => {
+        // Fetch full details (including regulation rules) for each city in parallel
+        return Promise.all(data.map(c => api.getCity(c.id)));
+      })
+      .then(setCities)
+      .catch(e => setCitiesError(e.message ?? 'Failed to load city data'))
+      .finally(() => setCitiesLoading(false));
+  }, []);
+
+  const handleCitySelected = useCallback((selected: CityData, addr?: string) => {
+    setCity(selected);
     setAddress(addr);
-    setAnswers(EMPTY_ANSWERS);
+    setAnswers(EMPTY);
+    setResult(null);
     setStep('questions');
   }, []);
 
@@ -43,93 +52,133 @@ export default function App() {
     setAnswers(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  const handleQuestionsComplete = useCallback(() => {
+  const handleQuestionsComplete = useCallback(async () => {
     if (!city) return;
-    const complianceResult = checkCompliance(city, answers);
-    setResult(complianceResult);
-    setStep('results');
+    setChecking(true);
+    try {
+      const compliance = await api.checkCompliance(city.id, answers);
+      setResult(compliance);
+      setStep('results');
+    } catch (e) {
+      console.error('Compliance check failed:', e);
+    } finally {
+      setChecking(false);
+    }
   }, [city, answers]);
 
   const handleRestart = useCallback(() => {
     setStep('address');
     setCity(null);
     setAddress(undefined);
-    setAnswers(EMPTY_ANSWERS);
+    setAnswers(EMPTY);
     setResult(null);
   }, []);
 
   const handleRetake = useCallback(() => {
-    setAnswers(EMPTY_ANSWERS);
+    setAnswers(EMPTY);
     setResult(null);
     setStep('questions');
   }, []);
 
-  const questions = city ? getQuestionsForCity(city) : [];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 to-blue-50 flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="p-1.5 bg-blue-600 rounded-lg">
-            <ShieldCheck className="w-5 h-5 text-white" />
+      <header className="bg-slate-900 border-b border-slate-800 sticky top-0 z-20">
+        <div className="max-w-5xl mx-auto px-4 py-3.5 flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-blue-600 rounded-lg">
+              <ShieldCheck className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-white leading-none">STR Compliance Checker</h1>
+              <p className="text-xs text-slate-400 mt-0.5">Short-Term Rental Regulations</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-bold text-gray-900 leading-tight">STR Compliance Checker</h1>
-            <p className="text-xs text-gray-500">Short-Term Rental Regulations · 12 Major US Cities</p>
-          </div>
+
+          {city && step !== 'address' && (
+            <div className="ml-4 hidden sm:flex items-center gap-1.5 px-3 py-1 bg-slate-800 rounded-full">
+              <span className="w-2 h-2 rounded-full bg-blue-400" />
+              <span className="text-xs text-slate-300 font-medium">{city.name}, {city.state}</span>
+            </div>
+          )}
+
           {step !== 'address' && (
-            <button
-              onClick={handleRestart}
-              className="ml-auto flex items-center gap-1 text-xs text-gray-500 hover:text-gray-800 transition-colors"
-            >
-              <Home className="w-3.5 h-3.5" />
-              Start over
+            <button onClick={handleRestart}
+              className="ml-auto flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors">
+              <Home className="w-3.5 h-3.5" /> Start over
             </button>
           )}
         </div>
       </header>
 
-      {/* City Indicator */}
-      {city && step !== 'address' && (
-        <div className="bg-blue-600 text-white text-center py-1.5 text-xs font-medium">
-          Checking regulations for: {city.name}, {city.state}
-          {address && <span className="opacity-75"> · {address}</span>}
+      {/* City bar */}
+      {city && address && step !== 'address' && (
+        <div className="bg-blue-600 text-center py-1.5 text-xs text-blue-100">
+          Checking: <span className="font-semibold text-white">{address}</span>
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main */}
       <main className="flex-1 flex items-start justify-center py-8 px-4">
-        <div className="w-full max-w-lg">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-            {step === 'address' && (
-              <AddressStep onCitySelected={handleCitySelected} />
+        <div className="w-full max-w-4xl">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+
+            {/* Loading cities */}
+            {citiesLoading && (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                <p className="text-sm text-slate-500">Loading city regulations…</p>
+              </div>
             )}
 
-            {step === 'questions' && city && (
-              <QuestionStep
-                questions={questions}
-                answers={answers}
-                onAnswerChange={handleAnswerChange}
-                onComplete={handleQuestionsComplete}
-                onBack={() => setStep('address')}
-                cityName={`${city.name}, ${city.state}`}
-              />
+            {/* Error loading cities */}
+            {!citiesLoading && citiesError && (
+              <div className="text-center py-12">
+                <p className="text-red-600 font-semibold">Failed to connect to the API</p>
+                <p className="text-sm text-slate-500 mt-1">{citiesError}</p>
+                <p className="text-xs text-slate-400 mt-3">Make sure the API server is running: <code className="bg-slate-100 px-1 rounded">npm run dev</code></p>
+              </div>
             )}
 
-            {step === 'results' && result && (
-              <ResultsStep
-                result={result}
-                address={address}
-                onRestart={handleRestart}
-                onRetake={handleRetake}
-              />
+            {/* Steps */}
+            {!citiesLoading && !citiesError && (
+              <>
+                {step === 'address' && (
+                  <AddressStep cities={cities} onCitySelected={handleCitySelected} />
+                )}
+
+                {step === 'questions' && city && (
+                  checking ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                      <p className="text-sm text-slate-500">Running compliance check…</p>
+                    </div>
+                  ) : (
+                    <QuestionStep
+                      questions={getQuestionsForCity(city)}
+                      answers={answers}
+                      city={city}
+                      onAnswerChange={handleAnswerChange}
+                      onComplete={handleQuestionsComplete}
+                      onBack={() => setStep('address')}
+                    />
+                  )
+                )}
+
+                {step === 'results' && result && (
+                  <ResultsStep
+                    result={result}
+                    address={address}
+                    onRestart={handleRestart}
+                    onRetake={handleRetake}
+                  />
+                )}
+              </>
             )}
           </div>
 
-          {/* Footer */}
-          <p className="text-center text-xs text-gray-400 mt-4">
-            Data sourced from official city portals · Last updated April 2026 · Not legal advice
+          <p className="text-center text-xs text-slate-400 mt-4">
+            Data sourced from official city portals · Regulations verified April 2026 · Not legal advice
           </p>
         </div>
       </main>
